@@ -233,7 +233,7 @@ bash-completions copy ~/dev
 
 ## Integration with Symlink
 
-This tool is designed to work with the [symlink](https://github.com/Open-Technology-Foundation/symlink) utility:
+This tool is designed to work with the [symlink](https://github.com/Open-Technology-Foundation/symlink) utility. To use the `.symlink` facility for batch processing, you need the symlink program installed from https://github.com/Open-Technology-Foundation/symlink.
 
 1. Run `symlink --scan-symlink` to identify scripts needing symlinks
 2. Run `bash-completions symlink` to generate completions for all symlinked scripts

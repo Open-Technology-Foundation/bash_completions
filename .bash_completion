@@ -1,4 +1,4 @@
-# bash completion for bash-completions
+# Bash completion for bash-completions command
 _bash_completions() {
     local cur prev opts
     COMPREPLY=()
@@ -6,117 +6,113 @@ _bash_completions() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     # Main commands
-    local commands="copy generate symlink"
+    local commands="copy generate symlink version"
 
     # Global options
-    local global_opts="-h --help -v --verbose -q --quiet"
+    local global_opts="-h --help -v --verbose -q --quiet -V --version"
 
-    # Options for each command
-    local copy_opts="-y --yes -h --help"
-    local generate_opts="-d --directory -v --verbose -q --quiet -h --help"
-    local symlink_opts="-f --force -n --dry-run -s --skip-install -q --quiet -v --verbose -h --help"
-
-    # If we're completing the first word after bash-completions
+    # If we're completing the first argument after the command
     if [[ ${COMP_CWORD} -eq 1 ]]; then
-        COMPREPLY=($(compgen -W "$commands $global_opts" -- "$cur"))
+        COMPREPLY=( $(compgen -W "${commands} ${global_opts}" -- ${cur}) )
         return 0
     fi
 
-    # Get the command (first non-option argument)
-    local cmd=""
-    local i
-    for ((i=1; i<${#COMP_WORDS[@]}; i++)); do
-        case "${COMP_WORDS[i]}" in
-            -*)
-                # Skip options
-                case "${COMP_WORDS[i]}" in
-                    -d|--directory)
-                        ((i++)) # Skip the directory argument too
-                        ;;
-                esac
+    # Get the command (skip global options)
+    local command=""
+    local i=1
+    while [[ $i -lt ${COMP_CWORD} ]]; do
+        case "${COMP_WORDS[$i]}" in
+            -h|--help|-v|--verbose|-q|--quiet|-V|--version)
+                ((i++))
                 ;;
-            copy|generate|symlink)
-                cmd="${COMP_WORDS[i]}"
+            copy|generate|symlink|version)
+                command="${COMP_WORDS[$i]}"
                 break
+                ;;
+            *)
+                ((i++))
                 ;;
         esac
     done
 
-    case "$cmd" in
+    case "$command" in
         copy)
             case "$prev" in
-                copy)
-                    COMPREPLY=($(compgen -W "$copy_opts" -- "$cur"))
-                    _filedir -d
-                    return 0
-                    ;;
                 -y|--yes|-h|--help)
-                    _filedir -d
                     return 0
                     ;;
                 *)
+                    local copy_opts="-y --yes -h --help"
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "$copy_opts" -- "$cur"))
+                        COMPREPLY=( $(compgen -W "${copy_opts}" -- ${cur}) )
                     else
-                        _filedir -d
+                        # Complete directories
+                        COMPREPLY=( $(compgen -d -- ${cur}) )
                     fi
-                    return 0
                     ;;
             esac
             ;;
         generate)
             case "$prev" in
                 -d|--directory)
-                    _filedir -d
+                    # Complete directories
+                    COMPREPLY=( $(compgen -d -- ${cur}) )
                     return 0
                     ;;
-                generate)
-                    COMPREPLY=($(compgen -W "$generate_opts" -- "$cur"))
-                    _filedir
+                -v|--verbose|-q|--quiet|-h|--help)
                     return 0
                     ;;
                 *)
+                    local generate_opts="-d --directory -v --verbose -q --quiet -h --help"
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "$generate_opts" -- "$cur"))
+                        COMPREPLY=( $(compgen -W "${generate_opts}" -- ${cur}) )
                     else
-                        # Complete with executable files in current directory
-                        _filedir
-                        # Also add executable files without extension
-                        local executables
-                        executables=$(find . -maxdepth 1 -type f -executable -printf "%f\n" 2>/dev/null)
-                        COMPREPLY+=($(compgen -W "$executables" -- "$cur"))
+                        # Complete executable files in current directory or specified directory
+                        local dir="."
+                        # Check if -d was used earlier
+                        local j=1
+                        while [[ $j -lt ${COMP_CWORD} ]]; do
+                            if [[ "${COMP_WORDS[$j]}" == "-d" || "${COMP_WORDS[$j]}" == "--directory" ]]; then
+                                if [[ $((j+1)) -lt ${COMP_CWORD} ]]; then
+                                    dir="${COMP_WORDS[$((j+1))]}"
+                                fi
+                                break
+                            fi
+                            ((j++))
+                        done
+                        COMPREPLY=( $(compgen -f -X '!*' -- ${cur}) )
                     fi
-                    return 0
                     ;;
             esac
             ;;
         symlink)
             case "$prev" in
-                symlink)
-                    COMPREPLY=($(compgen -W "$symlink_opts" -- "$cur"))
-                    _filedir -d
-                    return 0
-                    ;;
                 -f|--force|-n|--dry-run|-s|--skip-install|-q|--quiet|-v|--verbose|-h|--help)
-                    _filedir -d
                     return 0
                     ;;
                 *)
+                    local symlink_opts="-f --force -n --dry-run -s --skip-install -q --quiet -v --verbose -h --help"
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "$symlink_opts" -- "$cur"))
+                        COMPREPLY=( $(compgen -W "${symlink_opts}" -- ${cur}) )
                     else
-                        _filedir -d
+                        # Complete directories
+                        COMPREPLY=( $(compgen -d -- ${cur}) )
                     fi
-                    return 0
                     ;;
             esac
             ;;
-        *)
-            # No command specified yet, offer commands and global options
-            COMPREPLY=($(compgen -W "$commands $global_opts" -- "$cur"))
+        version)
+            # version command takes no arguments
             return 0
             ;;
+        *)
+            # If no command is recognized, offer commands and global options
+            COMPREPLY=( $(compgen -W "${commands} ${global_opts}" -- ${cur}) )
+            ;;
     esac
+
+    return 0
 }
 
+# Register the completion function
 complete -F _bash_completions bash-completions

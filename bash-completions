@@ -73,11 +73,13 @@ Commands:
   copy      Copy completion files to /etc/bash_completion.d/
   generate  Generate bash completion files for scripts
   symlink   Batch process directories with .symlink files
+  version   Show version information
 
 Global Options:
-  -h, --help     Show this help message
-  -v, --verbose  Enable verbose output
-  -q, --quiet    Suppress non-error output
+  -h, --help       Show this help message
+  -v, --verbose    Enable verbose output
+  -q, --quiet      Suppress non-error output
+  -V, --version    Show version information
 
 Use '$PRG <command> --help' for command-specific help.
 
@@ -582,6 +584,15 @@ cmd_symlink() {
 }
 
 # --------------------------------------------------------------------------------
+# Command: version
+# --------------------------------------------------------------------------------
+
+cmd_version() {
+  echo "$PRG $VERSION"
+  exit 0
+}
+
+# --------------------------------------------------------------------------------
 # Main dispatcher
 # --------------------------------------------------------------------------------
 
@@ -590,6 +601,9 @@ main() {
   while (($#)); do case "$1" in
     -h|--help)
       usage 0
+      ;;
+    -V|--version)
+      cmd_version
       ;;
     -v|--verbose)
       VERBOSE=1
@@ -619,6 +633,9 @@ main() {
       ;;
     symlink)
       cmd_symlink "$@"
+      ;;
+    version)
+      cmd_version
       ;;
     '')
       error "No command specified"
