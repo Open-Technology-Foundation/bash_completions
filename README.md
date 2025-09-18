@@ -2,6 +2,8 @@
 
 A unified bash completion management utility that automatically generates intelligent tab-completion files for shell scripts using Claude AI.
 
+**Repository:** https://github.com/Open-Technology-Foundation/bash_completions
+
 ## Features
 
 - **AI-Powered Generation** - Uses Claude AI to analyze scripts and generate context-aware completions
@@ -14,7 +16,7 @@ A unified bash completion management utility that automatically generates intell
 
 ```bash
 # Clone the repository
-git clone <repository-url> bash-completions
+git clone https://github.com/Open-Technology-Foundation/bash_completions bash-completions
 cd bash-completions
 
 # Make the script executable
@@ -282,7 +284,7 @@ bash-completions generate -v problematic-script
 
 ## License
 
-[Specify your license]
+This project is licensed under the GNU General Public License v3.0 (GPL-3.0) - see the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
@@ -293,7 +295,7 @@ Contributions are welcome! Please ensure:
 
 ## Author
 
-[Specify author information]
+Open Technology Foundation
 
 ---
 
