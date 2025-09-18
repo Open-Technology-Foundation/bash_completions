@@ -1,0 +1,105 @@
+#!/bin/bash
+
+_claude_completion() {
+  local cur prev opts
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+  # Main commands
+  local commands="config mcp migrate-installer setup-token doctor update install"
+  
+  # Global options
+  local global_opts="-d --debug --verbose -p --print --output-format --input-format
+    --mcp-debug --dangerously-skip-permissions --allowedTools --disallowedTools
+    --mcp-config --append-system-prompt --permission-mode -c --continue
+    -r --resume --model --fallback-model --settings --add-dir --ide
+    --strict-mcp-config --session-id -v --version -h --help"
+
+  # Output format options
+  local output_formats="text json stream-json"
+  
+  # Input format options
+  local input_formats="text stream-json"
+  
+  # Permission modes
+  local permission_modes="acceptEdits bypassPermissions default plan"
+
+  # Handle subcommands
+  if [[ ${COMP_CWORD} -gt 1 ]]; then
+    local cmd="${COMP_WORDS[1]}"
+    
+    case "${cmd}" in
+      config)
+        local config_commands="get set remove rm list ls add help"
+        local config_opts="-h --help -g --global"
+        if [[ ${COMP_CWORD} -eq 2 ]]; then
+          COMPREPLY=($(compgen -W "${config_commands}" -- ${cur}))
+        else
+          COMPREPLY=($(compgen -W "${config_opts}" -- ${cur}))
+        fi
+        return 0
+        ;;
+      mcp)
+        local mcp_commands="serve add remove list get add-json add-from-claude-desktop reset-project-choices help"
+        local mcp_opts="-h --help"
+        if [[ ${COMP_CWORD} -eq 2 ]]; then
+          COMPREPLY=($(compgen -W "${mcp_commands}" -- ${cur}))
+        else
+          COMPREPLY=($(compgen -W "${mcp_opts}" -- ${cur}))
+        fi
+        return 0
+        ;;
+      install)
+        local install_opts="--force -h --help"
+        local install_targets="stable latest"
+        COMPREPLY=($(compgen -W "${install_opts} ${install_targets}" -- ${cur}))
+        return 0
+        ;;
+      migrate-installer|setup-token|doctor|update)
+        COMPREPLY=($(compgen -W "-h --help" -- ${cur}))
+        return 0
+        ;;
+    esac
+  fi
+
+  # Handle option values
+  case "${prev}" in
+    --output-format)
+      COMPREPLY=($(compgen -W "${output_formats}" -- ${cur}))
+      return 0
+      ;;
+    --input-format)
+      COMPREPLY=($(compgen -W "${input_formats}" -- ${cur}))
+      return 0
+      ;;
+    --permission-mode)
+      COMPREPLY=($(compgen -W "${permission_modes}" -- ${cur}))
+      return 0
+      ;;
+    --model|--fallback-model)
+      COMPREPLY=($(compgen -W "sonnet opus claude-sonnet-4-20250514" -- ${cur}))
+      return 0
+      ;;
+    --add-dir)
+      COMPREPLY=($(compgen -d -- ${cur}))
+      return 0
+      ;;
+    --settings|--mcp-config)
+      COMPREPLY=($(compgen -f -- ${cur}))
+      return 0
+      ;;
+  esac
+
+  # If first word, complete with commands and global options
+  if [[ ${COMP_CWORD} -eq 1 ]]; then
+    COMPREPLY=($(compgen -W "${commands} ${global_opts}" -- ${cur}))
+    return 0
+  fi
+
+  # Default completion with global options
+  COMPREPLY=($(compgen -W "${global_opts}" -- ${cur}))
+  return 0
+}
+
+complete -F _claude_completion claude

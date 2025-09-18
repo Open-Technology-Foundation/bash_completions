@@ -1,0 +1,67 @@
+#!/bin/bash
+
+_openai_completion() {
+  local cur prev opts base_opts api_subcommands tools_subcommands
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+  base_opts="-h --help -v --verbose -b --api-base -k --api-key -p --proxy -o --organization -t --api-type --api-version --azure-endpoint --azure-ad-token -V --version"
+  
+  main_commands="api tools migrate grit"
+  
+  api_subcommands="chat.completions.create images.generate models.list audio.speech.create audio.transcriptions.create audio.translations.create embeddings.create files.create files.delete files.list files.retrieve moderations.create completions.create edits.create fine_tunes.create fine_tunes.list fine_tunes.retrieve fine_tunes.cancel fine_tunes.events assistants.create assistants.list assistants.retrieve assistants.update assistants.delete threads.create threads.retrieve threads.update threads.delete threads.messages.create threads.messages.list threads.messages.retrieve threads.runs.create threads.runs.list threads.runs.retrieve threads.runs.update threads.runs.cancel threads.runs.submit_tool_outputs threads.runs.steps.list threads.runs.steps.retrieve vector_stores.create vector_stores.list vector_stores.retrieve vector_stores.update vector_stores.delete vector_stores.files.create vector_stores.files.list vector_stores.files.retrieve vector_stores.files.delete batches.create batches.retrieve batches.cancel batches.list"
+  
+  tools_subcommands="fine_tunes.prepare_data"
+
+  case "${prev}" in
+    --api-type|-t)
+      COMPREPLY=( $(compgen -W "openai azure" -- ${cur}) )
+      return 0
+      ;;
+    --api-base|-b|--api-key|-k|--proxy|-p|--organization|-o|--api-version|--azure-endpoint|--azure-ad-token)
+      return 0
+      ;;
+  esac
+
+  if [[ ${COMP_CWORD} -eq 1 ]]; then
+    opts="${main_commands} ${base_opts}"
+    COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+    return 0
+  fi
+
+  local first_arg="${COMP_WORDS[1]}"
+  
+  case "${first_arg}" in
+    api)
+      if [[ ${COMP_CWORD} -eq 2 ]]; then
+        COMPREPLY=( $(compgen -W "${api_subcommands} ${base_opts}" -- ${cur}) )
+      else
+        COMPREPLY=( $(compgen -W "${base_opts}" -- ${cur}) )
+      fi
+      return 0
+      ;;
+    tools)
+      if [[ ${COMP_CWORD} -eq 2 ]]; then
+        COMPREPLY=( $(compgen -W "${tools_subcommands} ${base_opts}" -- ${cur}) )
+      else
+        COMPREPLY=( $(compgen -W "${base_opts}" -- ${cur}) )
+      fi
+      return 0
+      ;;
+    migrate|grit)
+      COMPREPLY=( $(compgen -W "${base_opts}" -- ${cur}) )
+      return 0
+      ;;
+    *)
+      if [[ ${cur} == -* ]]; then
+        COMPREPLY=( $(compgen -W "${base_opts}" -- ${cur}) )
+      fi
+      return 0
+      ;;
+  esac
+}
+
+complete -F _openai_completion openai
+
+#fin

@@ -1,0 +1,122 @@
+# bash completion for bash-completions
+_bash_completions() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    # Main commands
+    local commands="copy generate symlink"
+
+    # Global options
+    local global_opts="-h --help -v --verbose -q --quiet"
+
+    # Options for each command
+    local copy_opts="-y --yes -h --help"
+    local generate_opts="-d --directory -v --verbose -q --quiet -h --help"
+    local symlink_opts="-f --force -n --dry-run -s --skip-install -q --quiet -v --verbose -h --help"
+
+    # If we're completing the first word after bash-completions
+    if [[ ${COMP_CWORD} -eq 1 ]]; then
+        COMPREPLY=($(compgen -W "$commands $global_opts" -- "$cur"))
+        return 0
+    fi
+
+    # Get the command (first non-option argument)
+    local cmd=""
+    local i
+    for ((i=1; i<${#COMP_WORDS[@]}; i++)); do
+        case "${COMP_WORDS[i]}" in
+            -*)
+                # Skip options
+                case "${COMP_WORDS[i]}" in
+                    -d|--directory)
+                        ((i++)) # Skip the directory argument too
+                        ;;
+                esac
+                ;;
+            copy|generate|symlink)
+                cmd="${COMP_WORDS[i]}"
+                break
+                ;;
+        esac
+    done
+
+    case "$cmd" in
+        copy)
+            case "$prev" in
+                copy)
+                    COMPREPLY=($(compgen -W "$copy_opts" -- "$cur"))
+                    _filedir -d
+                    return 0
+                    ;;
+                -y|--yes|-h|--help)
+                    _filedir -d
+                    return 0
+                    ;;
+                *)
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "$copy_opts" -- "$cur"))
+                    else
+                        _filedir -d
+                    fi
+                    return 0
+                    ;;
+            esac
+            ;;
+        generate)
+            case "$prev" in
+                -d|--directory)
+                    _filedir -d
+                    return 0
+                    ;;
+                generate)
+                    COMPREPLY=($(compgen -W "$generate_opts" -- "$cur"))
+                    _filedir
+                    return 0
+                    ;;
+                *)
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "$generate_opts" -- "$cur"))
+                    else
+                        # Complete with executable files in current directory
+                        _filedir
+                        # Also add executable files without extension
+                        local executables
+                        executables=$(find . -maxdepth 1 -type f -executable -printf "%f\n" 2>/dev/null)
+                        COMPREPLY+=($(compgen -W "$executables" -- "$cur"))
+                    fi
+                    return 0
+                    ;;
+            esac
+            ;;
+        symlink)
+            case "$prev" in
+                symlink)
+                    COMPREPLY=($(compgen -W "$symlink_opts" -- "$cur"))
+                    _filedir -d
+                    return 0
+                    ;;
+                -f|--force|-n|--dry-run|-s|--skip-install|-q|--quiet|-v|--verbose|-h|--help)
+                    _filedir -d
+                    return 0
+                    ;;
+                *)
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "$symlink_opts" -- "$cur"))
+                    else
+                        _filedir -d
+                    fi
+                    return 0
+                    ;;
+            esac
+            ;;
+        *)
+            # No command specified yet, offer commands and global options
+            COMPREPLY=($(compgen -W "$commands $global_opts" -- "$cur"))
+            return 0
+            ;;
+    esac
+}
+
+complete -F _bash_completions bash-completions

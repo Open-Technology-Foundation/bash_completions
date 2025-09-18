@@ -1,0 +1,163 @@
+# Bash completion for rg (ripgrep) command
+# Generated with Claude Code
+
+_rg() {
+  local cur prev opts
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+  # All ripgrep options based on man page and help output
+  opts="
+    -A --after-context -B --before-context -b --byte-offset -s --case-sensitive
+    --color --colors -C --context --context-separator -c --count --count-matches
+    --crlf --dfa-size-limit --debug -d --max-depth -E --encoding --engine
+    -f --file --field-context-separator --field-match-separator -F --fixed-strings
+    -L --follow --generate -g --glob --glob-case-insensitive -h --help --heading
+    --hidden --hostname-bin --hyperlink-format -i --ignore-case --iglob
+    --ignore-file --ignore-file-case-insensitive --include-zero -v --invert-match
+    --json -x --line-regexp --line-buffered -M --max-columns --max-columns-preview
+    -m --max-count --max-filesize --mmap -U --multiline --multiline-dotall
+    -0 --null --null-data --no-config --no-heading --no-ignore --no-ignore-dot
+    --no-ignore-exclude --no-ignore-files --no-ignore-global --no-ignore-messages
+    --no-ignore-parent --no-ignore-vcs --no-line-number --no-messages --no-mmap
+    --no-pcre2-unicode --no-require-git --no-stats --no-unicode -o --only-matching
+    --one-file-system --passthru --path-separator -P --pcre2 --pcre2-version
+    -p --pretty --pre --pre-glob -q --quiet --regex-size-limit -r --replace
+    --require-git -z --search-zip -S --smart-case --sort --sortr --sort-files
+    --stats --stop-on-nonmatch -a --text -j --threads --trim -t --type
+    --type-add --type-clear --type-list -T --type-not -u --unrestricted
+    -V --version --vimgrep -w --word-regexp -H --with-filename -I --no-filename
+    -l --files-with-matches --files-without-match --files -e --regexp -n
+    --line-number -N --no-line-number --no-context-separator --no-block-buffered
+    --block-buffered --no-text --no-byte-offset --no-column --column
+    --no-fixed-strings --unicode --no-multiline --no-multiline-dotall --binary
+    --no-binary --no-search-zip --no-hidden --no-follow --no-glob-case-insensitive
+    --ignore --ignore-dot --ignore-exclude --ignore-files --ignore-global
+    --ignore-parent --ignore-vcs --ignore-messages --messages --no-include-zero
+    --no-line-buffered --no-max-columns-preview --no-null --no-only-matching
+    --no-passthru --no-pretty --no-quiet --no-smart-case --no-sort-files
+    --no-stats --no-stop-on-nonmatch --no-trim --no-unrestricted --no-vimgrep
+    --no-word-regexp --no-with-filename --auto-hybrid-regex --no-auto-hybrid-regex
+    --no-json --no-sort --trace --maxdepth --passthrough
+  "
+
+  # Handle options that take arguments
+  case "${prev}" in
+    -A|--after-context|-B|--before-context|-C|--context|-m|--max-count)
+      # Numeric argument
+      return 0
+      ;;
+    -e|--regexp|-f|--file)
+      # Pattern or file argument - don't complete
+      return 0
+      ;;
+    -g|--glob|--iglob)
+      # Glob pattern - don't complete
+      return 0
+      ;;
+    -t|--type)
+      # File types - get from rg --type-list if available
+      if command -v rg >/dev/null 2>&1; then
+        local types
+        types=$(rg --type-list 2>/dev/null | cut -d: -f1)
+        COMPREPLY=($(compgen -W "${types}" -- "${cur}"))
+      fi
+      return 0
+      ;;
+    -T|--type-not)
+      # File types - get from rg --type-list if available
+      if command -v rg >/dev/null 2>&1; then
+        local types
+        types=$(rg --type-list 2>/dev/null | cut -d: -f1)
+        COMPREPLY=($(compgen -W "${types}" -- "${cur}"))
+      fi
+      return 0
+      ;;
+    --type-add|--type-clear)
+      # Type specification - don't complete
+      return 0
+      ;;
+    -d|--max-depth|--maxdepth|-j|--threads|-M|--max-columns)
+      # Numeric argument
+      return 0
+      ;;
+    --max-filesize|--dfa-size-limit|--regex-size-limit)
+      # Size argument with optional suffix
+      return 0
+      ;;
+    -E|--encoding)
+      # Encoding names
+      local encodings="auto none utf-8 utf-16 utf-16be utf-16le utf-32 utf-32be utf-32le"
+      COMPREPLY=($(compgen -W "${encodings}" -- "${cur}"))
+      return 0
+      ;;
+    --engine)
+      # Regex engine
+      local engines="default pcre2 auto"
+      COMPREPLY=($(compgen -W "${engines}" -- "${cur}"))
+      return 0
+      ;;
+    --color)
+      # Color options
+      local colors="never auto always ansi"
+      COMPREPLY=($(compgen -W "${colors}" -- "${cur}"))
+      return 0
+      ;;
+    --sort|--sortr)
+      # Sort options
+      local sorts="none path modified accessed created"
+      COMPREPLY=($(compgen -W "${sorts}" -- "${cur}"))
+      return 0
+      ;;
+    --generate)
+      # Generate options
+      local generates="man complete-bash complete-zsh complete-fish complete-powershell"
+      COMPREPLY=($(compgen -W "${generates}" -- "${cur}"))
+      return 0
+      ;;
+    --hyperlink-format)
+      # Hyperlink format aliases
+      local formats="default none file grep+ kitty macvim textmate vscode vscode-insiders vscodium"
+      COMPREPLY=($(compgen -W "${formats}" -- "${cur}"))
+      return 0
+      ;;
+    --colors|--context-separator|--field-context-separator|--field-match-separator)
+      # Complex string arguments - don't complete
+      return 0
+      ;;
+    --path-separator)
+      # Path separator
+      return 0
+      ;;
+    -r|--replace)
+      # Replacement string - don't complete
+      return 0
+      ;;
+    --pre|--hostname-bin)
+      # Command - complete commands
+      COMPREPLY=($(compgen -c -- "${cur}"))
+      return 0
+      ;;
+    --pre-glob)
+      # Glob pattern - don't complete
+      return 0
+      ;;
+    --ignore-file)
+      # File path - complete files
+      COMPREPLY=($(compgen -f -- "${cur}"))
+      return 0
+      ;;
+  esac
+
+  # If current word starts with -, complete options
+  if [[ "${cur}" == -* ]]; then
+    COMPREPLY=($(compgen -W "${opts}" -- "${cur}"))
+    return 0
+  fi
+
+  # Otherwise complete files and directories
+  COMPREPLY=($(compgen -f -- "${cur}"))
+}
+
+complete -F _rg rg

@@ -1,0 +1,634 @@
+#!/usr/bin/env bash
+#shellcheck disable=SC1090,SC1091
+set -euo pipefail
+VERSION='1.0.0'
+PRG0=$(readlink -en -- "$0")
+PRG=${PRG0##*/}
+PRGDIR=${PRG0%/*}
+readonly -- VERSION PRG0 PRG PRGDIR
+
+# Global variables
+declare -i VERBOSE=1 PROMPT=1
+declare -- COMMAND=''
+
+# Colour definitions
+[[ -t 2 ]] && declare -- RED=$'\033[0;31m' GREEN=$'\033[0;32m' YELLOW=$'\033[0;33m' CYAN=$'\033[0;36m' NC=$'\033[0m' || declare -- RED='' GREEN='' YELLOW='' CYAN='' NC=''
+readonly -- RED GREEN YELLOW CYAN NC
+
+# --------------------------------------------------------------------------------
+# Utility functions
+# --------------------------------------------------------------------------------
+
+# Core message function using FUNCNAME for context
+_msg() {
+  local -- status="${FUNCNAME[1]}" prefix="$PRG:" msg
+  case "$status" in
+    success) prefix+=" ${GREEN}✓${NC}" ;;
+    warn)    prefix+=" ${YELLOW}⚡${NC}" ;;
+    info)    prefix+=" ${CYAN}◉${NC}" ;;
+    error)   prefix+=" ${RED}✗${NC}" ;;
+    *)       ;;
+  esac
+  for msg in "$@"; do printf '%s %s\n' "$prefix" "$msg"; done
+}
+
+# Conditional output based on verbosity
+vecho() { ((VERBOSE)) || return 0; _msg "$@"; }
+success() { ((VERBOSE)) || return 0; >&2 _msg "$@"; }
+warn() { ((VERBOSE)) || return 0; >&2 _msg "$@"; }
+info() { ((VERBOSE)) || return 0; >&2 _msg "$@"; }
+
+# Unconditional output
+error() { >&2 _msg "$@"; }
+die() { (($# > 1)) && error "${@:2}"; exit "${1:-0}"; }
+
+# Trim whitespace
+trim() {
+  local v="$*"
+  v="${v#"${v%%[![:blank:]]*}"}"
+  echo -n "${v%"${v##*[![:blank:]]}"}"
+}
+
+# Validate argument presence
+noarg() {
+  if (($# < 2)) || [[ ${2:0:1} == '-' ]]; then
+    die 2 "Missing argument for option '$1'"
+  fi
+  true
+}
+
+# --------------------------------------------------------------------------------
+# Common usage functions
+# --------------------------------------------------------------------------------
+
+usage() {
+  cat <<EOT
+$PRG $VERSION - Bash completion file management utility
+
+Combines functionality for generating, installing, and managing bash completion files.
+
+Usage: $PRG <command> [options] [arguments]
+
+Commands:
+  copy      Copy completion files to /etc/bash_completion.d/
+  generate  Generate bash completion files for scripts
+  symlink   Batch process directories with .symlink files
+
+Global Options:
+  -h, --help     Show this help message
+  -v, --verbose  Enable verbose output
+  -q, --quiet    Suppress non-error output
+
+Use '$PRG <command> --help' for command-specific help.
+
+Examples:
+  $PRG generate myscript
+  $PRG symlink /ai/scripts
+  $PRG copy /path/to/dir
+
+EOT
+  exit "${1:-0}"
+}
+
+usage_copy() {
+  cat <<EOT
+$PRG copy - Copy bash completion files to system directory
+
+Usage: $PRG copy [OPTIONS] [DIRECTORY]
+
+Copies all .bash_completion files in a directory tree to /etc/bash_completion.d/,
+renaming them with the basename of their containing directory.
+
+Options:
+  -y, --yes      Non-interactive mode (overwrite without prompting)
+  -h, --help     Show this help message
+
+Arguments:
+  DIRECTORY      Base directory to scan (default: current directory)
+
+Notes:
+  - Requires sudo privileges for system installation
+  - Default: interactive mode (-i) for cp command
+  - Use -y to overwrite files without confirmation
+
+Examples:
+  $PRG copy /ai/scripts              # Interactive mode
+  $PRG copy -y /ai/scripts           # Non-interactive mode
+
+EOT
+  exit "${1:-0}"
+}
+
+usage_generate() {
+  cat <<EOT
+$PRG generate - Generate bash completion files for scripts
+
+Usage: $PRG generate [OPTIONS] SCRIPT [SCRIPT...]
+
+Generate bash completion files for specified scripts using Claude AI.
+
+Options:
+  -d, --directory DIR  Directory to search for scripts and create completion file
+                       (default: current directory)
+  -v, --verbose        Show detailed output including Claude's response
+  -q, --quiet          Suppress non-error output
+  -h, --help           Show this help message
+
+Arguments:
+  SCRIPT               Name of script(s) to generate completions for
+
+Exit Codes:
+  0 - Success
+  1 - No scripts specified
+  2 - Directory access error
+  3 - Script not found
+  4 - Generation failed
+
+Examples:
+  $PRG generate myscript
+  $PRG generate -d /path/to/scripts script1 script2
+  $PRG generate -v myscript
+
+EOT
+  exit "${1:-0}"
+}
+
+usage_symlink() {
+  cat <<EOT
+$PRG symlink - Batch generate completions using .symlink files
+
+Usage: $PRG symlink [OPTIONS] [DIRECTORY]
+
+Scan directory tree for .symlink files and generate bash completions for listed executables.
+
+Options:
+  -f, --force          Regenerate completion files even if they exist
+  -n, --dry-run        Show what would be done without making changes
+  -s, --skip-install   Skip installation to /etc/bash_completion.d/
+  -q, --quiet          Suppress non-error output
+  -v, --verbose        Enable verbose output
+  -h, --help           Show this help message
+
+Arguments:
+  DIRECTORY            Base directory to scan (default: current directory)
+
+.symlink File Format:
+  - One executable name per line
+  - Lines starting with # are ignored
+  - Empty lines are ignored
+
+Exit Codes:
+  0 - Success
+  1 - Invalid arguments
+  2 - Directory not accessible
+  3 - Generation errors occurred
+  4 - Installation failed
+
+Examples:
+  $PRG symlink                    # Process current directory
+  $PRG symlink /ai/scripts        # Process /ai/scripts tree
+  $PRG symlink -f /ai/scripts     # Force regenerate all completions
+  $PRG symlink -n /ai/scripts     # Dry run to see what would be done
+
+EOT
+  exit "${1:-0}"
+}
+
+# --------------------------------------------------------------------------------
+# Command: copy
+# --------------------------------------------------------------------------------
+
+cmd_copy() {
+  local -i non_interactive=0
+  local -- start_dir=""
+
+  # Parse copy-specific options
+  while (($#)); do case "$1" in
+    -y|--yes)
+      non_interactive=1
+      ;;
+    -h|--help)
+      usage_copy 0
+      ;;
+    -[yh]*) #shellcheck disable=SC2046 #split up single options
+      set -- '' $(printf -- "-%c " $(grep -o . <<<"${1:1}")) "${@:2}"
+      ;;
+    -*)
+      die 22 "Invalid option '$1' for copy command"
+      ;;
+    *)
+      start_dir="$1"
+      ;;
+  esac; shift; done
+
+  # Default to current directory if not specified
+  : "${start_dir:="$PWD"}"
+
+  # Force root
+  if ((EUID)); then
+    if ((non_interactive)); then
+      sudo "$PRG0" copy -y "$start_dir"
+    else
+      sudo "$PRG0" copy "$start_dir"
+    fi
+    exit
+  fi
+
+  local -a files
+  local -- file base
+  local -a cp_opts=()
+
+  # Set cp options based on interactive mode
+  if ((non_interactive)); then
+    cp_opts=(-f)  # Force overwrite
+  else
+    cp_opts=(-i)  # Interactive mode
+  fi
+
+  readarray -t files < <(find "$start_dir" -type f -name '.bash_completion' | sort)
+
+  if ((${#files[@]} == 0)); then
+    echo "No .bash_completion files found in $start_dir"
+    exit 0
+  fi
+
+  for file in "${files[@]}"; do
+    base=$(basename "$(dirname "$file")")
+    echo "Installing: $base"
+    cp "${cp_opts[@]}" "$file" /etc/bash_completion.d/"$base"
+  done
+}
+
+# --------------------------------------------------------------------------------
+# Command: generate
+# --------------------------------------------------------------------------------
+
+cmd_generate() {
+  local -- directory="$PWD"
+  local -a scripts=()
+  local -i quiet=1
+
+  # Parse generate-specific options
+  while (($#)); do case "$1" in
+    -d|--directory)
+      shift
+      noarg "-d|--directory" "${1:-}"
+      directory="$1"
+      ;;
+    -v|--verbose) quiet=0; VERBOSE=1 ;;
+    -q|--quiet)   quiet=1; VERBOSE=0 ;;
+    -h|--help) usage_generate 0 ;;
+    -[dvqh]*) #shellcheck disable=SC2046 #split up single options
+      set -- '' $(printf -- "-%c " $(grep -o . <<<"${1:1}")) "${@:2}"
+      ;;
+    -*)
+      die 22 "Invalid option '$1' for generate command" ;;
+    *)
+      scripts+=( "$1" ) ;;
+  esac; shift; done
+
+  # Validate inputs
+  ((${#scripts[@]})) || die 1 "No scripts specified"
+
+  # Validate directory exists and is accessible
+  directory=$(readlink -en -- "$directory")
+  [[ -d "$directory" ]] || die 2 "Directory '$directory' does not exist"
+  [[ -r "$directory" ]] || die 2 "Directory '$directory' is not readable"
+  [[ -w "$directory" ]] || die 2 "Directory '$directory' is not writable"
+
+  # Change to the directory
+  cd "$directory"
+
+  # Check that the scripts specified actually exist
+  local -- script scriptstr
+  local -a script_display=()
+  for script in "${scripts[@]}"; do
+    script=$(basename -- "$script")
+    [[ -f "$script" ]] || die 3 "Script '$script' not found in directory '$directory'"
+    script_display+=("'$script'")
+  done
+  scriptstr="script$( ((${#scripts[@]} < 2)) || echo s ) $(IFS=', '; echo "${script_display[*]}")"
+
+  # Back up existing completion file if it exists
+  local -- backup_file=""
+  if [[ -f "$directory/.bash_completion" ]]; then
+    backup_file="$directory/.bash_completion.bak"
+    cp -p "$directory/.bash_completion" "$backup_file" 2>/dev/null || true
+  fi
+
+  rm -f "$directory"/.bash_completion
+
+  # Generate the completion file
+  local -- claude_prompt="Create a bash completions file for $scriptstr and store in file '$directory/.bash_completion'. Read any relevant documentation in the directory (such as README.md), and the script itself, to determine the bash completion structure. If complete with no errors, output 'completions created', otherwise output 'completions failed'. No other commentary."
+
+  ((quiet)) || info "Generating completion for: $scriptstr"
+  ((quiet)) || info "Using Claude to analyze scripts..."
+
+  local -- claude_output
+  # Note: --dangerously-skip-permissions is used as we've already validated directory access above
+  if ! claude_output=$(claude --print --add-dir "$directory" --dangerously-skip-permissions \
+      <<<"$claude_prompt" 2>&1); then
+    ((quiet)) || error "Claude output: $claude_output"
+    [[ -z "$backup_file" ]] || mv "$backup_file" "$directory/.bash_completion" 2>/dev/null
+    die 4 "Claude command failed"
+  fi
+
+  ((quiet)) || vecho "Claude response: $claude_output"
+
+  # Check Claude's response
+  if [[ "$claude_output" == *"completions failed"* ]]; then
+    [[ -z "$backup_file" ]] || mv "$backup_file" "$directory/.bash_completion" 2>/dev/null
+    die 4 "Claude reported completion generation failed"
+  fi
+
+  # Check if completion file was created
+  if [[ ! -f "$directory/.bash_completion" ]]; then
+    # Restore backup on failure
+    [[ -z "$backup_file" ]] || mv "$backup_file" "$directory/.bash_completion" 2>/dev/null
+    die 4 "Failed to create completion file"
+  fi
+
+  success "$directory/.bash_completion created"
+  # Remove backup on success
+  [[ -z "$backup_file" ]] || rm -f "$backup_file"
+}
+
+# --------------------------------------------------------------------------------
+# Command: symlink
+# --------------------------------------------------------------------------------
+
+cmd_symlink() {
+  local -- directory="${PWD}"
+  local -i force=0 dry_run=0 skip_install=0 quiet=0
+  local -i generation_errors=0 install_errors=0
+
+  # Parse symlink-specific options
+  while (($#)); do case "$1" in
+    -f|--force)
+      force=1
+      ;;
+    -n|--dry-run)
+      dry_run=1
+      ;;
+    -s|--skip-install)
+      skip_install=1
+      ;;
+    -q|--quiet)
+      quiet=1
+      VERBOSE=0
+      ;;
+    -v|--verbose)
+      VERBOSE=1
+      quiet=0
+      ;;
+    -h|--help)
+      usage_symlink 0
+      ;;
+    -[fnshqv]*) #shellcheck disable=SC2046 #split up single options
+      set -- '' $(printf -- "-%c " $(grep -o . <<<"${1:1}")) "${@:2}"
+      ;;
+    -*)
+      die 1 "Invalid option '$1' for symlink command. Use -h for help."
+      ;;
+    *)
+      directory="$1"
+      ;;
+  esac; shift; done
+
+  # Validate directory exists and is accessible
+  if [[ ! -e "$directory" ]]; then
+    die 2 "Directory '$directory' does not exist"
+  fi
+  directory=$(readlink -en -- "$directory")
+  [[ -d "$directory" ]] || die 2 "'$directory' is not a directory"
+  [[ -r "$directory" ]] || die 2 "Directory '$directory' is not readable"
+
+  ((quiet)) || info "Base directory: $directory"
+
+  # Find all .symlink files
+  local -a files
+  readarray -t files < <(find "$directory"/ -type f -name '.symlink' 2>/dev/null | sort)
+
+  if ((${#files[@]} == 0)); then
+    ((quiet)) || info "No .symlink files found in $directory"
+    exit 0
+  fi
+
+  ((quiet)) || info "${#files[@]} .symlink files found"
+  ((dry_run==0)) || warn "DRY RUN MODE - No changes will be made"
+  echo
+
+  # Process each .symlink file
+  local -- file dir symlink bc
+  local -a symlinks=()
+  local -i processed=0 skipped=0
+
+  for file in "${files[@]}"; do
+    file=$(readlink -en -- "$file")
+    dir=$(dirname "$file")
+    bc="$dir"/.bash_completion
+
+    # Check if completion file exists
+    if [[ -f "$bc" ]] && ((force == 0)); then
+      ((quiet)) || vecho "Skipping $dir (completion exists, use -f to force)"
+      ((skipped+=1))
+      continue
+    fi
+
+    ((quiet)) || info "Processing: $dir"
+
+    # Extract executable names from .symlink file
+    symlinks=()
+    while read -r symlink; do
+      symlink=$(trim "$symlink")
+      [[ -z "$symlink" || "${symlink:0:1}" == '#' ]] && continue
+      symlinks+=("$(basename "$symlink")")
+    done <"$file"
+
+    if ((${#symlinks[@]} == 0)); then
+      error "  No executables found in $file"
+      continue
+    fi
+
+    ((quiet)) || vecho "  Executables: ${symlinks[*]}"
+
+    # Generate or regenerate completion file
+    if ((dry_run)); then
+      echo "  Would generate completion for: ${symlinks[*]}"
+      ((processed+=1))
+    else
+      if ((force)) && [[ -f "$bc" ]]; then
+        ((quiet)) || vecho "  Removing existing completion file"
+        rm -f "$bc"
+      fi
+
+      # Call generate command internally
+      if (
+        cd "$dir"
+        VERBOSE=0
+        cmd_generate "${symlinks[@]}"
+      ) 2>/dev/null; then
+        if [[ -f "$bc" ]]; then
+          chmod 664 "$bc"
+          ((quiet)) || success "  ✓ Completion file created"
+          ((processed+=1))
+        else
+          error "  ✗ Completion file not created"
+          ((generation_errors+=1))
+        fi
+      else
+        error "  ✗ Generation failed for $file"
+        ((generation_errors+=1))
+      fi
+    fi
+    echo
+  done
+
+  # Summary of generation phase
+  ((quiet)) || {
+    info "Generation Summary:"
+    echo "  Processed: $processed"
+    echo "  Skipped: $skipped"
+    echo "  Errors: $generation_errors"
+    echo
+  }
+
+  # Installation phase
+  if ((skip_install)); then
+    ((quiet)) || info "Skipping installation (--skip-install specified)"
+  elif ((dry_run)); then
+    # Show what would be installed
+    local -a completions
+    readarray -t completions < <(find "$directory" -type f -name '.bash_completion' 2>/dev/null | sort)
+    if ((${#completions[@]} > 0)); then
+      echo "Would install ${#completions[@]} completion file(s) to /etc/bash_completion.d/:"
+      local -- compname
+      for file in "${completions[@]}"; do
+        file=$(readlink -en -- "$file")
+        compname=$(basename -- "$(dirname -- "$file")")
+        echo "  $compname <- $file"
+      done
+    fi
+  else
+    # Actually install completion files
+    local -a completions
+    readarray -t completions < <(find "$directory" -type f -name '.bash_completion' 2>/dev/null | sort)
+
+    if ((${#completions[@]} == 0)); then
+      ((quiet)) || info "No completion files to install"
+    else
+      ((quiet)) || info "Installing ${#completions[@]} completion file(s) to /etc/bash_completion.d/"
+
+      # Check for sudo if needed
+      if [[ ! -w /etc/bash_completion.d/ ]] && [[ $EUID -ne 0 ]]; then
+        if ! command -v sudo >/dev/null 2>&1; then
+          die 4 "Installation requires root privileges but sudo is not available"
+        fi
+      fi
+
+      local -- compname
+      local -i installed=0
+      for file in "${completions[@]}"; do
+        file=$(readlink -en -- "$file")
+        compname=/etc/bash_completion.d/"$(basename -- "$(dirname -- "$file")")"
+
+        ((quiet)) || echo -n "  Installing $compname... "
+
+        if [[ -w /etc/bash_completion.d/ ]]; then
+          cp -p "$file" "$compname" 2>/dev/null && {
+            ((quiet)) || echo "✓"
+            ((installed+=1))
+          } || {
+            ((quiet)) || echo "✗"
+            error "Failed to copy $file to $compname"
+            ((install_errors+=1))
+          }
+        else
+          sudo cp -p "$file" "$compname" 2>/dev/null && {
+            ((quiet)) || echo "✓"
+            ((installed+=1))
+          } || {
+            ((quiet)) || echo "✗"
+            error "Failed to copy $file to $compname"
+            ((install_errors+=1))
+          }
+        fi
+      done
+
+      ((quiet)) || {
+        echo
+        info "Installation Summary:"
+        echo "  Installed: $installed"
+        echo "  Failed: $install_errors"
+
+        if ((installed)); then
+          echo
+          success "To use the new completions, run:"
+          echo "  source /etc/bash_completion"
+          echo "Or start a new shell session."
+        fi
+      }
+    fi
+  fi
+
+  # Exit with appropriate code
+  if ((generation_errors)); then
+    exit 3
+  elif ((install_errors)); then
+    exit 4
+  else
+    exit 0
+  fi
+}
+
+# --------------------------------------------------------------------------------
+# Main dispatcher
+# --------------------------------------------------------------------------------
+
+main() {
+  # Handle global options and extract command
+  while (($#)); do case "$1" in
+    -h|--help)
+      usage 0
+      ;;
+    -v|--verbose)
+      VERBOSE=1
+      shift
+      ;;
+    -q|--quiet)
+      VERBOSE=0
+      shift
+      ;;
+    -*)
+      die 22 "Invalid global option '$1'. Use -h for help."
+      ;;
+    *)
+      COMMAND="$1"
+      shift
+      break
+      ;;
+  esac; done
+
+  # Dispatch to appropriate command
+  case "$COMMAND" in
+    copy)
+      cmd_copy "$@"
+      ;;
+    generate)
+      cmd_generate "$@"
+      ;;
+    symlink)
+      cmd_symlink "$@"
+      ;;
+    '')
+      error "No command specified"
+      usage 1
+      ;;
+    *)
+      die 22 "Invalid command '$COMMAND'. Use -h for help."
+      ;;
+  esac
+}
+
+main "$@"
+#fin

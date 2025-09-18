@@ -1,0 +1,439 @@
+#!/bin/bash
+
+_mysqldump_completion() {
+  local cur prev words cword
+  _init_completion || return
+
+  case "$prev" in
+    # Connection options
+    --host|-h)
+      COMPREPLY=( $(compgen -A hostname -- "$cur") )
+      return
+      ;;
+    --user|-u)
+      # Try to complete with system users, but also allow any input
+      COMPREPLY=( $(compgen -u -- "$cur") )
+      return
+      ;;
+    --password|-p|--password1|--password2|--password3)
+      # Don't complete passwords for security
+      return
+      ;;
+    --port|-P)
+      COMPREPLY=( $(compgen -W "3306 3307 3308" -- "$cur") )
+      return
+      ;;
+    --socket|-S)
+      COMPREPLY=( $(compgen -f -- "$cur") )
+      return
+      ;;
+    --protocol)
+      COMPREPLY=( $(compgen -W "tcp socket pipe memory" -- "$cur") )
+      return
+      ;;
+    
+    # File options
+    --result-file|-r|--tab|-T|--log-error)
+      COMPREPLY=( $(compgen -f -- "$cur") )
+      return
+      ;;
+    
+    # SSL options
+    --ssl-ca|--ssl-cert|--ssl-key|--ssl-crl|--server-public-key-path)
+      COMPREPLY=( $(compgen -f -- "$cur") )
+      return
+      ;;
+    --ssl-capath|--ssl-crlpath|--character-sets-dir|--plugin-dir)
+      COMPREPLY=( $(compgen -d -- "$cur") )
+      return
+      ;;
+    --ssl-mode)
+      COMPREPLY=( $(compgen -W "DISABLED PREFERRED REQUIRED VERIFY_CA VERIFY_IDENTITY" -- "$cur") )
+      return
+      ;;
+    --ssl-fips-mode)
+      COMPREPLY=( $(compgen -W "OFF ON STRICT" -- "$cur") )
+      return
+      ;;
+    --tls-version)
+      COMPREPLY=( $(compgen -W "TLSv1.2 TLSv1.3" -- "$cur") )
+      return
+      ;;
+    
+    # Format options
+    --compatible)
+      COMPREPLY=( $(compgen -W "ANSI" -- "$cur") )
+      return
+      ;;
+    --default-character-set)
+      COMPREPLY=( $(compgen -W "utf8 utf8mb4 latin1 binary ascii" -- "$cur") )
+      return
+      ;;
+    --default-auth)
+      COMPREPLY=( $(compgen -W "mysql_native_password caching_sha2_password" -- "$cur") )
+      return
+      ;;
+    
+    # Numeric options
+    --max-allowed-packet|--net-buffer-length|--port|--mysqld-long-query-time|--zstd-compression-level)
+      # Allow any numeric input
+      return
+      ;;
+    
+    # Multi-value options
+    --compression-algorithms)
+      COMPREPLY=( $(compgen -W "zstd zlib uncompressed" -- "$cur") )
+      return
+      ;;
+    --set-gtid-purged)
+      COMPREPLY=( $(compgen -W "ON COMMENTED OFF AUTO" -- "$cur") )
+      return
+      ;;
+    --source-data|--master-data|--dump-replica|--dump-slave)
+      COMPREPLY=( $(compgen -W "1 2" -- "$cur") )
+      return
+      ;;
+    
+    # Table/database specific options
+    --ignore-table)
+      _mysqldump_complete_database_table
+      return
+      ;;
+    --where|-w)
+      # Don't complete WHERE clauses - too complex
+      return
+      ;;
+    
+    # Databases option
+    --databases|-B)
+      _mysqldump_complete_databases
+      return
+      ;;
+  esac
+
+  # Handle option completion
+  if [[ "$cur" == -* ]]; then
+    local opts="
+      --help -?
+      --version -V
+      --verbose -v
+      --host -h
+      --user -u
+      --password -p
+      --password1
+      --password2
+      --password3
+      --port -P
+      --socket -S
+      --protocol
+      --bind-address
+      --all-databases -A
+      --databases -B
+      --tables
+      --single-transaction
+      --lock-tables -l
+      --lock-all-tables -x
+      --no-data -d
+      --no-create-info -t
+      --no-create-db -n
+      --complete-insert -c
+      --extended-insert -e
+      --insert-ignore
+      --replace
+      --add-drop-table
+      --add-drop-database
+      --add-drop-trigger
+      --add-locks
+      --disable-keys -K
+      --quick -q
+      --quote-names -Q
+      --compress -C
+      --create-options -a
+      --comments -i
+      --compact
+      --where -w
+      --order-by-primary
+      --routines -R
+      --events -E
+      --triggers
+      --hex-blob
+      --tab -T
+      --result-file -r
+      --force -f
+      --flush-logs -F
+      --flush-privileges
+      --ignore-table
+      --compatible
+      --default-character-set
+      --set-charset
+      --set-gtid-purged
+      --source-data
+      --master-data
+      --dump-replica
+      --dump-slave
+      --apply-replica-statements
+      --apply-slave-statements
+      --include-source-host-port
+      --include-master-host-port
+      --delete-source-logs
+      --delete-master-logs
+      --all-tablespaces -Y
+      --no-tablespaces -y
+      --column-statistics
+      --allow-keywords
+      --opt
+      --skip-opt
+      --dump-date
+      --tz-utc
+      --no-autocommit
+      --network-timeout -M
+      --ssl-mode
+      --ssl-ca
+      --ssl-capath
+      --ssl-cert
+      --ssl-cipher
+      --ssl-key
+      --ssl-crl
+      --ssl-crlpath
+      --tls-version
+      --ssl-fips-mode
+      --tls-ciphersuites
+      --ssl-session-data
+      --ssl-session-data-continue-on-failed-reuse
+      --server-public-key-path
+      --get-server-public-key
+      --enable-cleartext-plugin
+      --plugin-dir
+      --default-auth
+      --log-error
+      --max-allowed-packet
+      --net-buffer-length
+      --mysqld-long-query-time
+      --compression-algorithms
+      --zstd-compression-level
+      --show-create-table-skip-secondary-engine
+      --skip-generated-invisible-primary-key
+      --ignore-error
+      --fields-terminated-by
+      --fields-enclosed-by
+      --fields-optionally-enclosed-by
+      --fields-escaped-by
+      --lines-terminated-by
+      --xml -X
+    "
+    COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+    return
+  fi
+
+  # Handle positional arguments (database and table names)
+  local has_databases_option=0
+  local has_all_databases_option=0
+  local i
+
+  # Check if --databases or --all-databases options are present
+  for (( i=1; i < ${#words[@]}; i++ )); do
+    case "${words[i]}" in
+      --databases|-B)
+        has_databases_option=1
+        ;;
+      --all-databases|-A)
+        has_all_databases_option=1
+        ;;
+    esac
+  done
+
+  # If --all-databases is specified, no database completion needed
+  if [[ $has_all_databases_option -eq 1 ]]; then
+    return
+  fi
+
+  # If --databases is specified, complete with database names
+  if [[ $has_databases_option -eq 1 ]]; then
+    _mysqldump_complete_databases
+    return
+  fi
+
+  # Default behavior: first argument is database, subsequent are tables
+  local pos_args=()
+  for (( i=1; i < ${#words[@]}-1; i++ )); do
+    if [[ "${words[i]}" != -* && "${words[i-1]}" != --* ]]; then
+      pos_args+=("${words[i]}")
+    fi
+  done
+
+  if [[ ${#pos_args[@]} -eq 0 ]]; then
+    # First positional argument - complete database name
+    _mysqldump_complete_databases
+  else
+    # Subsequent arguments - complete table names for the first database
+    _mysqldump_complete_tables "${pos_args[0]}"
+  fi
+}
+
+# Function to complete database names
+_mysqldump_complete_databases() {
+  local databases
+  local mysql_cmd="mysql"
+  
+  # Build mysql connection command from current mysqldump options
+  local host_opt=""
+  local user_opt=""
+  local port_opt=""
+  local socket_opt=""
+  local password_opt=""
+  
+  local i
+  for (( i=1; i < ${#words[@]}; i++ )); do
+    case "${words[i]}" in
+      --host|-h)
+        if [[ $((i+1)) -lt ${#words[@]} ]]; then
+          host_opt="--host=${words[i+1]}"
+          ((i++))
+        fi
+        ;;
+      --user|-u)
+        if [[ $((i+1)) -lt ${#words[@]} ]]; then
+          user_opt="--user=${words[i+1]}"
+          ((i++))
+        fi
+        ;;
+      --port|-P)
+        if [[ $((i+1)) -lt ${#words[@]} ]]; then
+          port_opt="--port=${words[i+1]}"
+          ((i++))
+        fi
+        ;;
+      --socket|-S)
+        if [[ $((i+1)) -lt ${#words[@]} ]]; then
+          socket_opt="--socket=${words[i+1]}"
+          ((i+1))
+        fi
+        ;;
+    esac
+  done
+
+  # Try to get database list from MySQL
+  if databases=$(mysql $host_opt $user_opt $port_opt $socket_opt -BNe "SHOW DATABASES;" 2>/dev/null); then
+    # Filter out system databases for cleaner completion
+    databases=$(echo "$databases" | grep -v -E "^(information_schema|performance_schema|mysql|sys)$")
+    COMPREPLY=( $(compgen -W "$databases" -- "$cur") )
+  else
+    # Fallback to common database names if connection fails
+    COMPREPLY=( $(compgen -W "mysql information_schema performance_schema sys" -- "$cur") )
+  fi
+}
+
+# Function to complete table names for a given database
+_mysqldump_complete_tables() {
+  local database="$1"
+  local tables
+  local mysql_cmd="mysql"
+  
+  # Build mysql connection command from current mysqldump options
+  local host_opt=""
+  local user_opt=""
+  local port_opt=""
+  local socket_opt=""
+  
+  local i
+  for (( i=1; i < ${#words[@]}; i++ )); do
+    case "${words[i]}" in
+      --host|-h)
+        if [[ $((i+1)) -lt ${#words[@]} ]]; then
+          host_opt="--host=${words[i+1]}"
+          ((i++))
+        fi
+        ;;
+      --user|-u)
+        if [[ $((i+1)) -lt ${#words[@]} ]]; then
+          user_opt="--user=${words[i+1]}"
+          ((i++))
+        fi
+        ;;
+      --port|-P)
+        if [[ $((i+1)) -lt ${#words[@]} ]]; then
+          port_opt="--port=${words[i+1]}"
+          ((i++))
+        fi
+        ;;
+      --socket|-S)
+        if [[ $((i+1)) -lt ${#words[@]} ]]; then
+          socket_opt="--socket=${words[i+1]}"
+          ((i++))
+        fi
+        ;;
+    esac
+  done
+
+  # Try to get table list from MySQL for the specified database
+  if tables=$(mysql $host_opt $user_opt $port_opt $socket_opt -BNe "SHOW TABLES;" "$database" 2>/dev/null); then
+    COMPREPLY=( $(compgen -W "$tables" -- "$cur") )
+  fi
+}
+
+# Function to complete database.table format for --ignore-table
+_mysqldump_complete_database_table() {
+  if [[ "$cur" == *.* ]]; then
+    # Complete table name after database.
+    local database="${cur%.*}"
+    local table_prefix="${cur##*.}"
+    local tables
+    
+    # Use the same connection logic as above
+    local host_opt=""
+    local user_opt=""
+    local port_opt=""
+    local socket_opt=""
+    
+    local i
+    for (( i=1; i < ${#words[@]}; i++ )); do
+      case "${words[i]}" in
+        --host|-h)
+          if [[ $((i+1)) -lt ${#words[@]} ]]; then
+            host_opt="--host=${words[i+1]}"
+            ((i++))
+          fi
+          ;;
+        --user|-u)
+          if [[ $((i+1)) -lt ${#words[@]} ]]; then
+            user_opt="--user=${words[i+1]}"
+            ((i++))
+          fi
+          ;;
+        --port|-P)
+          if [[ $((i+1)) -lt ${#words[@]} ]]; then
+            port_opt="--port=${words[i+1]}"
+            ((i++))
+          fi
+          ;;
+        --socket|-S)
+          if [[ $((i+1)) -lt ${#words[@]} ]]; then
+            socket_opt="--socket=${words[i+1]}"
+            ((i++))
+          fi
+          ;;
+      esac
+    done
+
+    if tables=$(mysql $host_opt $user_opt $port_opt $socket_opt -BNe "SHOW TABLES;" "$database" 2>/dev/null); then
+      local completions=""
+      while IFS= read -r table; do
+        completions="$completions $database.$table"
+      done <<< "$tables"
+      COMPREPLY=( $(compgen -W "$completions" -- "$cur") )
+    fi
+  else
+    # Complete database name first
+    _mysqldump_complete_databases
+    # Add a dot after each database name
+    for (( i=0; i < ${#COMPREPLY[@]}; i++ )); do
+      COMPREPLY[i]="${COMPREPLY[i]}."
+    done
+    compopt -o nospace
+  fi
+}
+
+# Register the completion function
+complete -F _mysqldump_completion mysqldump
+
+#fin
